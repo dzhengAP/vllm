@@ -17,7 +17,7 @@ import tempfile
 import time
 import warnings
 from collections.abc import Callable, Iterable
-from contextlib import ExitStack, contextmanager, suppress
+from contextlib import ExitStack, contextmanager
 from multiprocessing import Process
 from pathlib import Path
 from typing import Any, Literal
@@ -1291,8 +1291,9 @@ def spawn_new_process_for_each_test(f: Callable[_P, None]) -> Callable[_P, None]
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> None:
         import torch.multiprocessing as mp
 
-        with suppress(RuntimeError):
-            mp.set_start_method("spawn")
+        if current_platform.is_rocm() or current_platform.is_xpu():
+            with contextlib.suppress(RuntimeError):
+                mp.set_start_method("spawn")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".tb", mode="wb") as tmp:
             tb_file = tmp.name
 
@@ -1316,6 +1317,7 @@ def spawn_new_process_for_each_test(f: Callable[_P, None]) -> Callable[_P, None]
 
             repo_root = str(VLLM_PATH.resolve())
             env = os.environ.copy()
+            env["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
             env["PYTHONPATH"] = repo_root + os.pathsep + env.get("PYTHONPATH", "")
 
             result = subprocess.run(
